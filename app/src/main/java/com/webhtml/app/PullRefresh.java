@@ -53,10 +53,6 @@ public class PullRefresh {
         return swipeRefreshLayout;
     }
 
-    /**
-     * Custom SwipeRefreshLayout sa proverom vrha stranice (scrollY == 0) 
-     * i VelocityTracker-om koji reaguje samo na brz i oštar trzaj nadole.
-     */
     public static class CustomSwipeRefreshLayout extends SwipeRefreshLayout {
         private final WebView targetWebView;
         private float startY = 0f;
@@ -73,7 +69,6 @@ public class PullRefresh {
 
         @Override
         public boolean onInterceptTouchEvent(MotionEvent ev) {
-            // Inicijalizujemo i pratimo brzinu pokreta prsta
             if (velocityTracker == null) {
                 velocityTracker = VelocityTracker.obtain();
             }
@@ -100,19 +95,19 @@ public class PullRefresh {
                     float diffY = ev.getY() - startY;
                     float diffX = Math.abs(ev.getX() - startX);
 
-                    // Ako je pokret horizontalan -> ignoriši
+                    // Horizontalni pokret -> ignoriši
                     if (diffX > diffY) {
                         return false;
                     }
 
-                    // Računamo brzinu pokreta u pikselima po sekundi
+                    // Računamo brzinu pokreta
                     velocityTracker.computeCurrentVelocity(1000);
                     float yVelocity = velocityTracker.getYVelocity();
 
-                    // USLOV: 
-                    // 1. Pomeraj nadole mora biti veći od 120 piksela
-                    // 2. Brzina povlačenja mora biti veća od 700 px/s (što znači brz, oštar trzaj)
-                    if (diffY > 120 && yVelocity > 700) {
+                    // STROGI USLOV ZA TRZAJ:
+                    // 1. Pomeraj mora biti bar 100 piksela nadole
+                    // 2. Brzina mora biti preko 2500 px/s (pravo, agresivno povlačenje / trzaj)
+                    if (diffY > 100 && yVelocity > 2500) {
                         isIntentionalPull = true;
                     } else if (!isIntentionalPull) {
                         return false;
