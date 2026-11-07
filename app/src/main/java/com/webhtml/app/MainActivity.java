@@ -52,7 +52,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean screenOn = false;
     private boolean allowZoom = false; 
     private boolean forceDark = false;
-    private boolean pullRefresh = false; // Dodato za pull-to-refresh konfiguraciju
+    private boolean pullRefresh = false;
 
     private WebView webView;
     private WebView overlayWebView; 
@@ -159,9 +159,8 @@ public class MainActivity extends AppCompatActivity {
             androidx.swiperefreshlayout.widget.SwipeRefreshLayout refreshedLayout = pullRefreshHelper.setup(
                 new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             );
-            // Uklanjamo webView iz rootLayout-a jer ga PullRefresh preuzima, pa postavljamo prilagođeni layout
             rootLayout.removeView(webView);
-            refreshedLayout.addView(webView, 0); // Vraćamo webView unutar swipe layout-a
+            refreshedLayout.addView(webView, 0);
             setContentView(refreshedLayout);
         } else {
             setContentView(rootLayout);
@@ -245,7 +244,7 @@ public class MainActivity extends AppCompatActivity {
                         "      };" +
                         "      reader.readAsDataURL(blob);" +
                         "    }).catch(err => window.AndroidBridge.cacheData('ERROR'));" +
-                        })();";
+                        "})();";
                 webView.evaluateJavascript(js, null);
 
                 webView.postDelayed(() -> DialogHelper.showNativeDownloadDialog(
@@ -532,7 +531,7 @@ public class MainActivity extends AppCompatActivity {
             screenOn = parseBoolean(jsContent, "screenOn", false);
             allowZoom = parseBoolean(jsContent, "allowZoom", false); 
             forceDark = parseBoolean(jsContent, "forceDark", false);
-            pullRefresh = parseBoolean(jsContent, "pullRefresh", false); // Učitavanje pullRefresh opcije
+            pullRefresh = parseBoolean(jsContent, "pullRefresh", false);
             startURL = parseString(jsContent, "startURL", "");
             broAgent = parseString(jsContent, "broAgent", "");
             externalDomains = parseArray(jsContent, "external");
