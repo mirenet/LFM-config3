@@ -1,10 +1,11 @@
 package com.webhtml.app;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
-import android.view.ViewConfiguration;
+import android.view.View;
 import android.webkit.WebView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -20,13 +21,17 @@ public class PullRefresh {
     }
 
     public CustomSwipeRefreshLayout setup(android.view.ViewGroup.LayoutParams layoutParams) {
-        swipeRefreshLayout = new CustomSwipeRefreshLayout(context);
+        swipeRefreshLayout = new CustomSwipeRefreshLayout(context, webView);
         
+        // Boje kružića: pozadina i strelica
+        swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
+        swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
+
         if (webView.getParent() != null) {
             ((android.view.ViewGroup) webView.getParent()).removeView(webView);
         }
 
-        swipeRefreshLayout.addView(webView, new CustomSwipeRefreshLayout.LayoutParams(
+        swipeRefreshLayout.addView(webView, new SwipeRefreshLayout.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT
         ));
@@ -47,61 +52,80 @@ public class PullRefresh {
         return swipeRefreshLayout;
     }
 
-    /**
-     * Custom SwipeRefreshLayout koji ignoriše sve kratke pokrete i skrol, 
-     * a pali se ISKLJUČIVO na dugo zadržavanje i dugačko povlačenje prsta nadole.
-     */
     public static class CustomSwipeRefreshLayout extends SwipeRefreshLayout {
+        private final WebView targetWebView;
         private float startY = 0f;
         private float startX = 0f;
         private long startTime = 0L;
         private boolean isIntentionalPull = false;
-        private final int touchSlop;
 
-        public CustomSwipeRefreshLayout(Context context) {
+        public CustomSwipeRefreshLayout(Context context, WebView webView) {
             super(context);
-            // Uzimamo standardni sistem prag za dodir da znamo šta je pomeraj
-            this.touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+            this.targetWebView = webView;
+            
+            // Početno je isključen da sprečimo bilo kakav rad tokom običnog skrola
+            setEnabled(false);
+
+            // Direktno pratimo dodire nad WebView-jem nezavisno od sistemskog SwipeRefreshLayout-a
+            targetWebView.setOnTouchListener(new View.OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    // Ako nismo na vrhu stranice, osiguravamo da je refresh ugasen
+                    if (targetWebView.getScrollY() > 0) {
+                        setEnabled(false);
+                        return false;
+                    }
+
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            startY = event.getY();
+                            startX = event.getX();
+                            startTime = System.currentTimeMillis();
+                            isIntentionalPull = false;
+                            setEnabled(false);
+                            break;
+
+                        case MotionEvent.ACTION_MOVE:
+                            float diffY = event.getY() - startY;
+                            float diffX = Math.abs(event.getX() - startX);
+                            long elapsedTime = System.currentTimeMillis() - startTime;
+
+                            // Ako je pokret više horizontalan nego vertikalan -> ignoriši
+                            if (diffX > diffY) {
+                                setEnabled(false);
+                                break;
+                            }
+
+                            // USLOV: Pomeraj > 150px i vreme > 150ms (drži prst i vuče nadole)
+                            if (diffY > 150 && elapsedTime > 150) {
+                                isIntentionalPull = true;
+                                setEnabled(true); // Tek sada aktiviramo SwipeRefreshLayout da pokaže kružić
+                            } else if (!isIntentionalPull) {
+                                setEnabled(false);
+                            }
+                            break;
+
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            if (!isIntentionalPull) {
+                                setEnabled(false);
+                            }
+                            isIntentionalPull = false;
+                            break;
+                    }
+                    
+                    // Vraćamo false da WebView i dalje normalno prima i obrađuje svoje standardne dodire i skrol
+                    return false;
+                }
+            });
         }
 
         @Override
-        public boolean onInterceptTouchEvent(MotionEvent ev) {
-            switch (ev.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    startY = ev.getY();
-                    startX = ev.getX();
-                    startTime = System.currentTimeMillis();
-                    isIntentionalPull = false;
-                    break;
-
-                case MotionEvent.ACTION_MOVE:
-                    float diffY = ev.getY() - startY;
-                    float diffX = Math.abs(ev.getX() - startX);
-                    long elapsedTime = System.currentTimeMillis() - startTime;
-
-                    // Ako je korisnik povukao levo-desno više nego gore-dole, ovo je horizontalni gest -> ignoriši
-                    if (diffX > diffY) {
-                        return false;
-                    }
-
-                    // GLAVNI USLOV KOJI SI TRAŽIO:
-                    // Da bi se aktivirao pull-to-refresh (kružić), pomeraj mora biti veći od 150 piksela 
-                    // I gest mora trajati duže od 150 milisekundi (čime se eliminišu brzi kratki trzaji - skrolovi).
-                    if (diffY > 150 && elapsedTime > 150) {
-                        isIntentionalPull = true;
-                    } else if (!isIntentionalPull) {
-                        // Sve dok korisnik nije napravio ovaj dug i svestan pokret, 
-                        // sistem blokira SwipeRefreshLayout i kružić se uopšte ne pojavljuje!
-                        return false;
-                    }
-                    break;
-
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    isIntentionalPull = false;
-                    break;
+        public boolean canChildScrollUp() {
+            if (targetWebView != null && targetWebView.getScrollY() > 0) {
+                return true;
             }
-            return super.onInterceptTouchEvent(ev);
+            return !isIntentionalPull;
         }
     }
 }
