@@ -52,6 +52,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean screenOn = false;
     private boolean allowZoom = false; 
     private boolean forceDark = false;
+    private boolean pullRefresh = false; // Dodato za pull-to-refresh konfiguraciju
 
     private WebView webView;
     private WebView overlayWebView; 
@@ -152,7 +153,19 @@ public class MainActivity extends AppCompatActivity {
         overlayWebView.loadUrl("file:///android_asset/menu.html?menu=true");
         rootLayout.addView(overlayWebView);
 
-        setContentView(rootLayout);
+        // PROVERA: Ako je pullRefresh uključen u konfiguraciji, aktiviramo PullRefresh mehanizam
+        if (pullRefresh) {
+            PullRefresh pullRefreshHelper = new PullRefresh(this, webView);
+            androidx.swiperefreshlayout.widget.SwipeRefreshLayout refreshedLayout = pullRefreshHelper.setup(
+                new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            );
+            // Uklanjamo webView iz rootLayout-a jer ga PullRefresh preuzima, pa postavljamo prilagođeni layout
+            rootLayout.removeView(webView);
+            refreshedLayout.addView(webView, 0); // Vraćamo webView unutar swipe layout-a
+            setContentView(refreshedLayout);
+        } else {
+            setContentView(rootLayout);
+        }
 
         menuControler = new MenuControler(overlayWebView);
         downloadHelper = new DownloadHelper(this);
@@ -232,7 +245,7 @@ public class MainActivity extends AppCompatActivity {
                         "      };" +
                         "      reader.readAsDataURL(blob);" +
                         "    }).catch(err => window.AndroidBridge.cacheData('ERROR'));" +
-                        "})();";
+                        })();";
                 webView.evaluateJavascript(js, null);
 
                 webView.postDelayed(() -> DialogHelper.showNativeDownloadDialog(
@@ -519,14 +532,12 @@ public class MainActivity extends AppCompatActivity {
             screenOn = parseBoolean(jsContent, "screenOn", false);
             allowZoom = parseBoolean(jsContent, "allowZoom", false); 
             forceDark = parseBoolean(jsContent, "forceDark", false);
+            pullRefresh = parseBoolean(jsContent, "pullRefresh", false); // Učitavanje pullRefresh opcije
             startURL = parseString(jsContent, "startURL", "");
             broAgent = parseString(jsContent, "broAgent", "");
             externalDomains = parseArray(jsContent, "external");
 
-        } catch (Exception e) {
-            //copyAssetToFile("appConfig.js", configFile);
-            //loadConfigFromInternalStorage();
-        }
+        } catch (Exception e) {}
     }
 
     private void copyAssetToFile(String assetName, File outFile) {
@@ -622,7 +633,6 @@ public class MainActivity extends AppCompatActivity {
             } catch (Exception ignored) {}
         }
 
-        // NOVO: Glatko osvežavanje glavnog prikaza bez crnog ekrana i gašenja aktivnosti
         @Keep
         @JavascriptInterface
         public void reloadMainApp() {
@@ -631,13 +641,12 @@ public class MainActivity extends AppCompatActivity {
                     MainActivity act = (MainActivity) mContext;
                     if (act.webView != null) {
                         act.webView.loadUrl("file:///android_asset/menu.html");
-                        act.webView.clearHistory(); // Briše samo istoriju kretanja (da Back ne vrati sajt), ali NE dira IndexedDB i LocalStorage osim ako je checkbox štikliran!
+                        act.webView.clearHistory();
                     }
                 });
             }
         }
 
-        // NOVO: Stvarno brisanje keša, kolačića i skladišta WebView-a
         @Keep
         @JavascriptInterface
         public void clearAppCacheAndData() {
@@ -719,7 +728,6 @@ public class MainActivity extends AppCompatActivity {
     public boolean dispatchKeyEvent(android.view.KeyEvent event) {
         if (event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_DOWN) {
             if (menuControler != null && menuControler.isMenuVisible()) {
-                // Meni je otvoren -> Potpuno ignoriši i pojedi Back taster!
                 return true; 
             }
         }
