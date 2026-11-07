@@ -1,11 +1,10 @@
 package com.webhtml.app;
 
 import android.content.Context;
-import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
-import android.view.View;
+import android.view.ViewConfiguration;
 import android.webkit.WebView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -21,12 +20,8 @@ public class PullRefresh {
     }
 
     public CustomSwipeRefreshLayout setup(android.view.ViewGroup.LayoutParams layoutParams) {
-        swipeRefreshLayout = new CustomSwipeRefreshLayout(context, webView);
+        swipeRefreshLayout = new CustomSwipeRefreshLayout(context);
         
-        // Boje kružića: pozadina i strelica
-        swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
-        swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
-
         if (webView.getParent() != null) {
             ((android.view.ViewGroup) webView.getParent()).removeView(webView);
         }
@@ -52,70 +47,61 @@ public class PullRefresh {
         return swipeRefreshLayout;
     }
 
+    /**
+     * Custom SwipeRefreshLayout koji ignoriše sve kratke pokrete i skrol, 
+     * a pali se ISKLJUČIVO na dugo zadržavanje i dugačko povlačenje prsta nadole.
+     */
     public static class CustomSwipeRefreshLayout extends SwipeRefreshLayout {
-        private final WebView targetWebView;
         private float startY = 0f;
         private float startX = 0f;
         private long startTime = 0L;
         private boolean isIntentionalPull = false;
+        private final int touchSlop;
 
-        public CustomSwipeRefreshLayout(Context context, WebView webView) {
+        public CustomSwipeRefreshLayout(Context context) {
             super(context);
-            this.targetWebView = webView;
-            
-            // Po default-u je isključen da spreči bilo kakvo paljenje na obične pokrete i skrol
-            setEnabled(false);
-
-            // Prati dodire direktno na WebView-ju
-            targetWebView.setOnTouchListener(new OnTouchListener() {
-                @Override
-                public boolean onTouch(View v, MotionEvent event) {
-                    switch (event.getAction()) {
-                        case MotionEvent.ACTION_DOWN:
-                            startY = event.getY();
-                            startX = event.getX();
-                            startTime = System.currentTimeMillis();
-                            isIntentionalPull = false;
-                            setEnabled(false);
-                            break;
-
-                        case MotionEvent.ACTION_MOVE:
-                            float diffY = event.getY() - startY;
-                            float diffX = Math.abs(event.getX() - startX);
-                            long elapsedTime = System.currentTimeMillis() - startTime;
-
-                            // Ako je pokret horizontalan (levo-desno) -> ignoriši
-                            if (diffX > diffY) {
-                                setEnabled(false);
-                                break;
-                            }
-
-                            // USLOV: Pomeraj veći od 150px i vreme duže od 150ms
-                            if (diffY > 150 && elapsedTime > 150) {
-                                isIntentionalPull = true;
-                                setEnabled(true);
-                            } else if (!isIntentionalPull) {
-                                setEnabled(false);
-                            }
-                            break;
-
-                        case MotionEvent.ACTION_UP:
-                        case MotionEvent.ACTION_CANCEL:
-                            if (!isIntentionalPull && !isRefreshing()) {
-                                setEnabled(false);
-                            }
-                            isIntentionalPull = false;
-                            break;
-                    }
-
-                    return false;
-                }
-            });
+            // Uzimamo standardni sistem prag za dodir da znamo šta je pomeraj
+            this.touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         }
 
         @Override
-        public boolean canChildScrollUp() {
-            return !isIntentionalPull;
+        public boolean onInterceptTouchEvent(MotionEvent ev) {
+            switch (ev.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    startY = ev.getY();
+                    startX = ev.getX();
+                    startTime = System.currentTimeMillis();
+                    isIntentionalPull = false;
+                    break;
+
+                case MotionEvent.ACTION_MOVE:
+                    float diffY = ev.getY() - startY;
+                    float diffX = Math.abs(ev.getX() - startX);
+                    long elapsedTime = System.currentTimeMillis() - startTime;
+
+                    // Ako je korisnik povukao levo-desno više nego gore-dole, ovo je horizontalni gest -> ignoriši
+                    if (diffX > diffY) {
+                        return false;
+                    }
+
+                    // GLAVNI USLOV KOJI SI TRAŽIO:
+                    // Da bi se aktivirao pull-to-refresh (kružić), pomeraj mora biti veći od 150 piksela 
+                    // I gest mora trajati duže od 150 milisekundi (čime se eliminišu brzi kratki trzaji - skrolovi).
+                    if (diffY > 150 && elapsedTime > 150) {
+                        isIntentionalPull = true;
+                    } else if (!isIntentionalPull) {
+                        // Sve dok korisnik nije napravio ovaj dug i svestan pokret, 
+                        // sistem blokira SwipeRefreshLayout i kružić se uopšte ne pojavljuje!
+                        return false;
+                    }
+                    break;
+
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    isIntentionalPull = false;
+                    break;
+            }
+            return super.onInterceptTouchEvent(ev);
         }
     }
 }
