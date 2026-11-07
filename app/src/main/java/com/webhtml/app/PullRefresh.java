@@ -1,6 +1,7 @@
 package com.webhtml.app;
 
 import android.content.Context;
+import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
@@ -21,6 +22,10 @@ public class PullRefresh {
 
     public CustomSwipeRefreshLayout setup(android.view.ViewGroup.LayoutParams layoutParams) {
         swipeRefreshLayout = new CustomSwipeRefreshLayout(context);
+        
+        // --- PODEŠAVANJE BOJA KRUŽIĆA ---
+        swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
+        swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
         
         if (webView.getParent() != null) {
             ((android.view.ViewGroup) webView.getParent()).removeView(webView);
