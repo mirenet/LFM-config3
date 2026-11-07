@@ -5,7 +5,7 @@ import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
-import android.view.ViewConfiguration;
+import android.view.View;
 import android.webkit.WebView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -21,10 +21,9 @@ public class PullRefresh {
     }
 
     public CustomSwipeRefreshLayout setup(android.view.ViewGroup.LayoutParams layoutParams) {
-        // Prosleđujemo webView u konstruktor da bismo pratili poziciju skrola
         swipeRefreshLayout = new CustomSwipeRefreshLayout(context, webView);
         
-        // Boje kružića (#1A1A1C pozadina i #CAD967 strelica)
+        // Boje kružića
         swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
         swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
         
@@ -58,64 +57,70 @@ public class PullRefresh {
         private float startY = 0f;
         private float startX = 0f;
         private long startTime = 0L;
-        private boolean isIntentionalPull = false;
-        private final int touchSlop;
 
         public CustomSwipeRefreshLayout(Context context, WebView webView) {
             super(context);
             this.targetWebView = webView;
-            this.touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+            
+            // Fizički gasimo sistem dok korisnik ne napravi pravi gest
+            setEnabled(false);
+
+            targetWebView.setOnTouchListener(new OnTouchListener() {
+                @Override
+                public boolean onTouch(View v, MotionEvent event) {
+                    // Ako nismo na vrhu stranice, osiguravamo da je refresh isključen
+                    if (targetWebView.getScrollY() > 0) {
+                        setEnabled(false);
+                        return false;
+                    }
+
+                    switch (event.getAction()) {
+                        case MotionEvent.ACTION_DOWN:
+                            startY = event.getY();
+                            startX = event.getX();
+                            startTime = System.currentTimeMillis();
+                            setEnabled(false);
+                            break;
+
+                        case MotionEvent.ACTION_MOVE:
+                            float diffY = event.getY() - startY;
+                            float diffX = Math.abs(event.getX() - startX);
+                            long elapsedTime = System.currentTimeMillis() - startTime;
+
+                            // Ako vuče levo-desno -> ignoriši
+                            if (diffX > diffY) {
+                                setEnabled(false);
+                                break;
+                            }
+
+                            // USLOV: Na vrhu smo + pomeraj > 150px + vreme držanja > 150ms
+                            if (diffY > 150 && elapsedTime > 150) {
+                                setEnabled(true); // Tek sada palimo sistem da prikaže kružić
+                            } else if (!isRefreshing()) {
+                                setEnabled(false);
+                            }
+                            break;
+
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            if (!isRefreshing()) {
+                                setEnabled(false);
+                            }
+                            break;
+                    }
+
+                    // Vraćamo false da WebView i dalje normalno skroluje i reaguje na klikove
+                    return false;
+                }
+            });
         }
 
         @Override
         public boolean canChildScrollUp() {
-            // Ako nismo na samom vrhu (scrollY > 0), sprečavamo pojavu kružića i dozvoljavamo normalan skrol
             if (targetWebView != null && targetWebView.getScrollY() > 0) {
                 return true;
             }
-            return !isIntentionalPull;
-        }
-
-        @Override
-        public boolean onInterceptTouchEvent(MotionEvent ev) {
-            // Ako nismo na vrhu, odmah prekidamo svaku interakciju sa refresh-om
-            if (targetWebView != null && targetWebView.getScrollY() > 0) {
-                isIntentionalPull = false;
-                return false;
-            }
-
-            switch (ev.getAction()) {
-                case MotionEvent.ACTION_DOWN:
-                    startY = ev.getY();
-                    startX = ev.getX();
-                    startTime = System.currentTimeMillis();
-                    isIntentionalPull = false;
-                    break;
-
-                case MotionEvent.ACTION_MOVE:
-                    float diffY = ev.getY() - startY;
-                    float diffX = Math.abs(ev.getX() - startX);
-                    long elapsedTime = System.currentTimeMillis() - startTime;
-
-                    // Ako je pokret horizontalan -> ignoriši
-                    if (diffX > diffY) {
-                        return false;
-                    }
-
-                    // USLOV: Na vrhu smo + pomeraj > 150px + vreme držanja > 150ms
-                    if (diffY > 150 && elapsedTime > 150) {
-                        isIntentionalPull = true;
-                    } else if (!isIntentionalPull) {
-                        return false;
-                    }
-                    break;
-
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    isIntentionalPull = false;
-                    break;
-            }
-            return super.onInterceptTouchEvent(ev);
+            return !isEnabled();
         }
     }
 }
