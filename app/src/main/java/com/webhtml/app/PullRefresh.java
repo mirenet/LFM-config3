@@ -24,7 +24,6 @@ public class PullRefresh {
     public CustomSwipeRefreshLayout setup(android.view.ViewGroup.LayoutParams layoutParams) {
         swipeRefreshLayout = new CustomSwipeRefreshLayout(context, webView);
         
-        // --- PODEŠAVANJE BOJA KRUŽIĆA ---
         swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
         swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
         
@@ -74,7 +73,7 @@ public class PullRefresh {
             }
             velocityTracker.addMovement(ev);
 
-            // Ako nismo na samom vrhu stranice, odmah prekidamo
+            // Ako nismo na vrhu, nema govora o refresu
             if (targetWebView != null && targetWebView.getScrollY() > 0) {
                 isIntentionalPull = false;
                 return false;
@@ -100,17 +99,13 @@ public class PullRefresh {
                         return false;
                     }
 
-                    // Računamo brzinu
                     velocityTracker.computeCurrentVelocity(1000);
                     float yVelocity = velocityTracker.getYVelocity();
 
-                    // ZAŠTITA OD SKROLA SA ODIGNUTIM PRSTOM (FLING-A):
-                    // Ako je brzina negativna (kreće se nagore) ili ako sistem detektuje 
-                    // da je u pitanju inercijalni skrol, odmah odbacujemo.
-                    // Refresh se pali SAMO ako je pomeraj dubok (> 130px) I brzina je u pozitivnom smeru (nadole)
-                    if (diffY > 130 && yVelocity > 1500 && yVelocity < 8000) {
-                        // Ograničili smo gornju granicu (< 8000) da divlje odbijanje prsta 
-                        // pri brzom skrolu ne aktivira lažni refresh!
+                    // DODATNA ZAŠTITA ZA KOMENTARE:
+                    // Pomeraj mora biti čist i nadole, brzina u zdravom opsegu (ne previše divlja da hvata fling),
+                    // i sprečavamo aktivaciju ako je pokret krenuo iz nekog unutrašnjeg trzaja.
+                    if (diffY > 140 && yVelocity > 1000 && yVelocity < 6000) {
                         isIntentionalPull = true;
                     } else if (!isIntentionalPull) {
                         return false;
