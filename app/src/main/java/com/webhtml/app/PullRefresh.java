@@ -21,8 +21,10 @@ public class PullRefresh {
     }
 
     public CustomSwipeRefreshLayout setup(android.view.ViewGroup.LayoutParams layoutParams) {
+        // Prosleđujemo webView da bi CustomSwipeRefreshLayout znao poziciju skrola
         swipeRefreshLayout = new CustomSwipeRefreshLayout(context, webView);
         
+        // --- PODEŠAVANJE BOJA KRUŽIĆA ---
         swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
         swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
         
@@ -51,6 +53,10 @@ public class PullRefresh {
         return swipeRefreshLayout;
     }
 
+    /**
+     * Custom SwipeRefreshLayout baziran na tvom radnom kodu, 
+     * sa dodatom proverom da je stranica na samom vrhu (scrollY == 0).
+     */
     public static class CustomSwipeRefreshLayout extends SwipeRefreshLayout {
         private final WebView targetWebView;
         private float startY = 0f;
@@ -67,10 +73,8 @@ public class PullRefresh {
 
         @Override
         public boolean onInterceptTouchEvent(MotionEvent ev) {
-            // KORISTIMO canScrollVertically(-1): 
-            // Ako WebView (ili unutrašnji element) može da se skroluje nagore, 
-            // znači da NISMO na vrhu i odmah prekidamo refresh!
-            if (targetWebView != null && targetWebView.canScrollVertically(-1)) {
+            // Ako nismo na samom vrhu stranice, odmah prekidamo i dozvoljavamo normalan skrol sajta
+            if (targetWebView != null && targetWebView.getScrollY() > 0) {
                 isIntentionalPull = false;
                 return false;
             }
@@ -84,7 +88,8 @@ public class PullRefresh {
                     break;
 
                 case MotionEvent.ACTION_MOVE:
-                    if (targetWebView != null && targetWebView.canScrollVertically(-1)) {
+                    // Dodatna provera u pokretu
+                    if (targetWebView != null && targetWebView.getScrollY() > 0) {
                         return false;
                     }
 
@@ -92,6 +97,7 @@ public class PullRefresh {
                     float diffX = Math.abs(ev.getX() - startX);
                     long elapsedTime = System.currentTimeMillis() - startTime;
 
+                    // Ako je korisnik povukao levo-desno više nego gore-dole -> ignoriši
                     if (diffX > diffY) {
                         return false;
                     }
