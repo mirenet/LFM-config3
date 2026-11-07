@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
+import android.view.VelocityTracker;
 import android.view.ViewConfiguration;
 import android.webkit.WebView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -21,7 +22,6 @@ public class PullRefresh {
     }
 
     public CustomSwipeRefreshLayout setup(android.view.ViewGroup.LayoutParams layoutParams) {
-        // Prosleđujemo webView da bi CustomSwipeRefreshLayout znao poziciju skrola
         swipeRefreshLayout = new CustomSwipeRefreshLayout(context, webView);
         
         // --- PODEŠAVANJE BOJA KRUŽIĆA ---
@@ -54,15 +54,15 @@ public class PullRefresh {
     }
 
     /**
-     * Custom SwipeRefreshLayout baziran na tvom radnom kodu, 
-     * sa dodatom proverom da je stranica na samom vrhu (scrollY == 0).
+     * Custom SwipeRefreshLayout sa proverom vrha stranice (scrollY == 0) 
+     * i VelocityTracker-om koji reaguje samo na brz i oštar trzaj nadole.
      */
     public static class CustomSwipeRefreshLayout extends SwipeRefreshLayout {
         private final WebView targetWebView;
         private float startY = 0f;
         private float startX = 0f;
-        private long startTime = 0L;
         private boolean isIntentionalPull = false;
+        private VelocityTracker velocityTracker = null;
         private final int touchSlop;
 
         public CustomSwipeRefreshLayout(Context context, WebView webView) {
@@ -73,7 +73,13 @@ public class PullRefresh {
 
         @Override
         public boolean onInterceptTouchEvent(MotionEvent ev) {
-            // Ako nismo na samom vrhu stranice, odmah prekidamo i dozvoljavamo normalan skrol sajta
+            // Inicijalizujemo i pratimo brzinu pokreta prsta
+            if (velocityTracker == null) {
+                velocityTracker = VelocityTracker.obtain();
+            }
+            velocityTracker.addMovement(ev);
+
+            // Ako nismo na samom vrhu stranice, odmah prekidamo
             if (targetWebView != null && targetWebView.getScrollY() > 0) {
                 isIntentionalPull = false;
                 return false;
@@ -83,27 +89,30 @@ public class PullRefresh {
                 case MotionEvent.ACTION_DOWN:
                     startY = ev.getY();
                     startX = ev.getX();
-                    startTime = System.currentTimeMillis();
                     isIntentionalPull = false;
                     break;
 
                 case MotionEvent.ACTION_MOVE:
-                    // Dodatna provera u pokretu
                     if (targetWebView != null && targetWebView.getScrollY() > 0) {
                         return false;
                     }
 
                     float diffY = ev.getY() - startY;
                     float diffX = Math.abs(ev.getX() - startX);
-                    long elapsedTime = System.currentTimeMillis() - startTime;
 
-                    // Ako je korisnik povukao levo-desno više nego gore-dole -> ignoriši
+                    // Ako je pokret horizontalan -> ignoriši
                     if (diffX > diffY) {
                         return false;
                     }
 
-                    // USLOV: Pomeraj veći od 150px I vreme duže od 150ms
-                    if (diffY > 150 && elapsedTime > 150) {
+                    // Računamo brzinu pokreta u pikselima po sekundi
+                    velocityTracker.computeCurrentVelocity(1000);
+                    float yVelocity = velocityTracker.getYVelocity();
+
+                    // USLOV: 
+                    // 1. Pomeraj nadole mora biti veći od 120 piksela
+                    // 2. Brzina povlačenja mora biti veća od 700 px/s (što znači brz, oštar trzaj)
+                    if (diffY > 120 && yVelocity > 700) {
                         isIntentionalPull = true;
                     } else if (!isIntentionalPull) {
                         return false;
@@ -113,6 +122,10 @@ public class PullRefresh {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     isIntentionalPull = false;
+                    if (velocityTracker != null) {
+                        velocityTracker.recycle();
+                        velocityTracker = null;
+                    }
                     break;
             }
             return super.onInterceptTouchEvent(ev);
