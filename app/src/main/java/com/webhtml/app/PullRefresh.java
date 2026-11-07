@@ -100,14 +100,17 @@ public class PullRefresh {
                         return false;
                     }
 
-                    // Računamo brzinu pokreta
+                    // Računamo brzinu
                     velocityTracker.computeCurrentVelocity(1000);
                     float yVelocity = velocityTracker.getYVelocity();
 
-                    // STROGI USLOV ZA TRZAJ:
-                    // 1. Pomeraj mora biti bar 100 piksela nadole
-                    // 2. Brzina mora biti preko 2500 px/s (pravo, agresivno povlačenje / trzaj)
-                    if (diffY > 100 && yVelocity > 2500) {
+                    // ZAŠTITA OD SKROLA SA ODIGNUTIM PRSTOM (FLING-A):
+                    // Ako je brzina negativna (kreće se nagore) ili ako sistem detektuje 
+                    // da je u pitanju inercijalni skrol, odmah odbacujemo.
+                    // Refresh se pali SAMO ako je pomeraj dubok (> 130px) I brzina je u pozitivnom smeru (nadole)
+                    if (diffY > 130 && yVelocity > 1500 && yVelocity < 8000) {
+                        // Ograničili smo gornju granicu (< 8000) da divlje odbijanje prsta 
+                        // pri brzom skrolu ne aktivira lažni refresh!
                         isIntentionalPull = true;
                     } else if (!isIntentionalPull) {
                         return false;
