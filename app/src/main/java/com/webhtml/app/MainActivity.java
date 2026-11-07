@@ -95,15 +95,48 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 1. Donji WebView
+        // 1. Donji glavni WebView (sa opcionalnim PullToRefresh-om)
         webView = new WebView(this);
         webView.setBackgroundColor(Color.parseColor("#070707"));
         webView.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
-        rootLayout.addView(webView);
 
-        // 2. Gornji WebView (Učitava menu.html OBAVEZNO sa ?menu=true parametrom)
+        if (pullRefresh) {
+            androidx.swiperefreshlayout.widget.SwipeRefreshLayout swipeRefreshLayout = new androidx.swiperefreshlayout.widget.SwipeRefreshLayout(this);
+            swipeRefreshLayout.setLayoutParams(new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT));
+
+            // Boje kružića
+            swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
+            swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
+
+            swipeRefreshLayout.addView(webView, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT
+            ));
+
+            swipeRefreshLayout.setOnRefreshListener(() -> {
+                if (webView != null) {
+                    webView.reload();
+                }
+                swipeRefreshLayout.postDelayed(() -> swipeRefreshLayout.setRefreshing(false), 1500);
+            });
+
+            // Kružić se aktivira ISKLJUČIVO kada je stranica na vrhu (scrollY == 0)
+            webView.getViewTreeObserver().addOnScrollChangedListener(() -> {
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setEnabled(webView.getScrollY() == 0);
+                }
+            });
+
+            rootLayout.addView(swipeRefreshLayout);
+        } else {
+            rootLayout.addView(webView);
+        }
+
+        // 2. Gornji WebView (Menu) - ostaje potpuno odvojen iznad svega
         overlayWebView = new WebView(this);
         overlayWebView.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -153,18 +186,7 @@ public class MainActivity extends AppCompatActivity {
         overlayWebView.loadUrl("file:///android_asset/menu.html?menu=true");
         rootLayout.addView(overlayWebView);
 
-        // PROVERA: Ako je pullRefresh uključen u konfiguraciji, aktiviramo PullRefresh mehanizam
-        if (pullRefresh) {
-            PullRefresh pullRefreshHelper = new PullRefresh(this, webView);
-            androidx.swiperefreshlayout.widget.SwipeRefreshLayout refreshedLayout = pullRefreshHelper.setup(
-                new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            );
-            rootLayout.removeView(webView);
-            refreshedLayout.addView(webView, 0);
-            setContentView(refreshedLayout);
-        } else {
-            setContentView(rootLayout);
-        }
+        setContentView(rootLayout);
 
         menuControler = new MenuControler(overlayWebView);
         downloadHelper = new DownloadHelper(this);
