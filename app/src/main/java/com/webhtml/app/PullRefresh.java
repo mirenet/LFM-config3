@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
+import android.view.View;
 import android.webkit.WebView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -65,7 +66,7 @@ public class PullRefresh {
             // Po default-u je isključen da spreči bilo kakvo paljenje na obične pokrete i skrol
             setEnabled(false);
 
-            // Prati dodire direktno na WebView-ju da izbegnemo sistemske konflikte sa dva layouth-a
+            // Prati dodire direktno na WebView-ju
             targetWebView.setOnTouchListener(new OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
@@ -75,7 +76,7 @@ public class PullRefresh {
                             startX = event.getX();
                             startTime = System.currentTimeMillis();
                             isIntentionalPull = false;
-                            setEnabled(false); // Na svaki novi dodir gasimo refresh
+                            setEnabled(false);
                             break;
 
                         case MotionEvent.ACTION_MOVE:
@@ -89,10 +90,10 @@ public class PullRefresh {
                                 break;
                             }
 
-                            // USLOV: Pomeraj veći od 150px i vreme duže od 150ms (sitan dug dodir i povlačenje nadole)
+                            // USLOV: Pomeraj veći od 150px i vreme duže od 150ms
                             if (diffY > 150 && elapsedTime > 150) {
                                 isIntentionalPull = true;
-                                setEnabled(true); // Tek sada palimo SwipeRefreshLayout
+                                setEnabled(true);
                             } else if (!isIntentionalPull) {
                                 setEnabled(false);
                             }
@@ -107,7 +108,6 @@ public class PullRefresh {
                             break;
                     }
 
-                    // Vraćamo false da WebView normalno obavlja skrolovanje i klikove
                     return false;
                 }
             });
@@ -115,7 +115,6 @@ public class PullRefresh {
 
         @Override
         public boolean canChildScrollUp() {
-            // Bez ikakvih provera WebView scroll-a, oslanjamo se čisto na naš isIntentionalPull fleg
             return !isIntentionalPull;
         }
     }
