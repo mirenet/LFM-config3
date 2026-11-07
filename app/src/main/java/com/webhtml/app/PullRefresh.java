@@ -5,7 +5,6 @@ import android.graphics.Color;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.MotionEvent;
-import android.view.VelocityTracker;
 import android.view.ViewConfiguration;
 import android.webkit.WebView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
@@ -56,8 +55,8 @@ public class PullRefresh {
         private final WebView targetWebView;
         private float startY = 0f;
         private float startX = 0f;
+        private long startTime = 0L;
         private boolean isIntentionalPull = false;
-        private VelocityTracker velocityTracker = null;
         private final int touchSlop;
 
         public CustomSwipeRefreshLayout(Context context, WebView webView) {
@@ -68,13 +67,10 @@ public class PullRefresh {
 
         @Override
         public boolean onInterceptTouchEvent(MotionEvent ev) {
-            if (velocityTracker == null) {
-                velocityTracker = VelocityTracker.obtain();
-            }
-            velocityTracker.addMovement(ev);
-
-            // Ako nismo na vrhu, nema govora o refresu
-            if (targetWebView != null && targetWebView.getScrollY() > 0) {
+            // KORISTIMO canScrollVertically(-1): 
+            // Ako WebView (ili unutrašnji element) može da se skroluje nagore, 
+            // znači da NISMO na vrhu i odmah prekidamo refresh!
+            if (targetWebView != null && targetWebView.canScrollVertically(-1)) {
                 isIntentionalPull = false;
                 return false;
             }
@@ -83,29 +79,25 @@ public class PullRefresh {
                 case MotionEvent.ACTION_DOWN:
                     startY = ev.getY();
                     startX = ev.getX();
+                    startTime = System.currentTimeMillis();
                     isIntentionalPull = false;
                     break;
 
                 case MotionEvent.ACTION_MOVE:
-                    if (targetWebView != null && targetWebView.getScrollY() > 0) {
+                    if (targetWebView != null && targetWebView.canScrollVertically(-1)) {
                         return false;
                     }
 
                     float diffY = ev.getY() - startY;
                     float diffX = Math.abs(ev.getX() - startX);
+                    long elapsedTime = System.currentTimeMillis() - startTime;
 
-                    // Horizontalni pokret -> ignoriši
                     if (diffX > diffY) {
                         return false;
                     }
 
-                    velocityTracker.computeCurrentVelocity(1000);
-                    float yVelocity = velocityTracker.getYVelocity();
-
-                    // DODATNA ZAŠTITA ZA KOMENTARE:
-                    // Pomeraj mora biti čist i nadole, brzina u zdravom opsegu (ne previše divlja da hvata fling),
-                    // i sprečavamo aktivaciju ako je pokret krenuo iz nekog unutrašnjeg trzaja.
-                    if (diffY > 140 && yVelocity > 1000 && yVelocity < 6000) {
+                    // USLOV: Pomeraj veći od 150px I vreme duže od 150ms
+                    if (diffY > 150 && elapsedTime > 150) {
                         isIntentionalPull = true;
                     } else if (!isIntentionalPull) {
                         return false;
@@ -115,10 +107,6 @@ public class PullRefresh {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     isIntentionalPull = false;
-                    if (velocityTracker != null) {
-                        velocityTracker.recycle();
-                        velocityTracker = null;
-                    }
                     break;
             }
             return super.onInterceptTouchEvent(ev);
