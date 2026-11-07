@@ -27,6 +27,7 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import androidx.annotation.Keep;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewFeature;
 
@@ -52,7 +53,6 @@ public class MainActivity extends AppCompatActivity {
     private boolean screenOn = false;
     private boolean allowZoom = false; 
     private boolean forceDark = false;
-    private boolean pullRefresh = false;
 
     private WebView webView;
     private WebView overlayWebView; 
@@ -95,48 +95,21 @@ public class MainActivity extends AppCompatActivity {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // 1. Donji glavni WebView (sa opcionalnim PullToRefresh-om)
+        // 1. Donji WebView (Glavni sadržaj) sa PullRefresh omotačem
         webView = new WebView(this);
         webView.setBackgroundColor(Color.parseColor("#070707"));
         webView.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        if (pullRefresh) {
-            androidx.swiperefreshlayout.widget.SwipeRefreshLayout swipeRefreshLayout = new androidx.swiperefreshlayout.widget.SwipeRefreshLayout(this);
-            swipeRefreshLayout.setLayoutParams(new FrameLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT));
+        // Primena PullRefresh-a ISKLJUČIVO na glavni WebView
+        PullRefresh pullRefreshHelper = new PullRefresh(this, webView);
+        SwipeRefreshLayout refreshLayout = pullRefreshHelper.setup(
+                new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+        );
+        rootLayout.addView(refreshLayout);
 
-            // Boje kružića
-            swipeRefreshLayout.setProgressBackgroundColorSchemeColor(Color.parseColor("#1A1A1C"));
-            swipeRefreshLayout.setColorSchemeColors(Color.parseColor("#CAD967"));
-
-            swipeRefreshLayout.addView(webView, new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-            ));
-
-            swipeRefreshLayout.setOnRefreshListener(() -> {
-                if (webView != null) {
-                    webView.reload();
-                }
-                swipeRefreshLayout.postDelayed(() -> swipeRefreshLayout.setRefreshing(false), 1500);
-            });
-
-            // Kružić se aktivira ISKLJUČIVO kada je stranica na vrhu (scrollY == 0)
-            webView.getViewTreeObserver().addOnScrollChangedListener(() -> {
-                if (swipeRefreshLayout != null) {
-                    swipeRefreshLayout.setEnabled(webView.getScrollY() == 0);
-                }
-            });
-
-            rootLayout.addView(swipeRefreshLayout);
-        } else {
-            rootLayout.addView(webView);
-        }
-
-        // 2. Gornji WebView (Menu) - ostaje potpuno odvojen iznad svega
+        // 2. Gornji WebView (Učitava menu.html OBAVEZNO sa ?menu=true parametrom)
         overlayWebView = new WebView(this);
         overlayWebView.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
@@ -364,7 +337,6 @@ public class MainActivity extends AppCompatActivity {
                 super.onPageFinished(view, url);
                 if (url != null && url.startsWith("file://") && view == webView) {
                     view.evaluateJavascript("window.webhtml = true;", null);
-                    view.clearHistory();
                 }
             }
             
@@ -553,12 +525,14 @@ public class MainActivity extends AppCompatActivity {
             screenOn = parseBoolean(jsContent, "screenOn", false);
             allowZoom = parseBoolean(jsContent, "allowZoom", false); 
             forceDark = parseBoolean(jsContent, "forceDark", false);
-            pullRefresh = parseBoolean(jsContent, "pullRefresh", false);
             startURL = parseString(jsContent, "startURL", "");
             broAgent = parseString(jsContent, "broAgent", "");
             externalDomains = parseArray(jsContent, "external");
 
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            copyAssetToFile("appConfig.js", configFile);
+            loadConfigFromInternalStorage();
+        }
     }
 
     private void copyAssetToFile(String assetName, File outFile) {
@@ -662,7 +636,6 @@ public class MainActivity extends AppCompatActivity {
                     MainActivity act = (MainActivity) mContext;
                     if (act.webView != null) {
                         act.webView.loadUrl("file:///android_asset/menu.html");
-                        act.webView.clearHistory();
                     }
                 });
             }
@@ -746,16 +719,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public boolean dispatchKeyEvent(android.view.KeyEvent event) {
-        if (event.getKeyCode() == android.view.KeyEvent.KEYCODE_BACK && event.getAction() == android.view.KeyEvent.ACTION_DOWN) {
-            if (menuControler != null && menuControler.isMenuVisible()) {
-                return true; 
-            }
-        }
-        return super.dispatchKeyEvent(event);
-    }
-
-    @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
 
@@ -805,16 +768,16 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         if (webView != null) {
-            if (webView.getParent() instanceof android.view.ViewGroup) {
-                ((android.view.ViewGroup) webView.getParent()).removeView(webView);
+            if (webView.getParent() instanceof ViewGroup) {
+                ((ViewGroup) webView.getParent()).removeView(webView);
             }
             webView.removeAllViews();
             webView.destroy();
             webView = null;
         }
         if (overlayWebView != null) {
-            if (overlayWebView.getParent() instanceof android.view.ViewGroup) {
-                ((android.view.ViewGroup) overlayWebView.getParent()).removeView(overlayWebView);
+            if (overlayWebView.getParent() instanceof ViewGroup) {
+                ((ViewGroup) overlayWebView.getParent()).removeView(overlayWebView);
             }
             overlayWebView.removeAllViews();
             overlayWebView.destroy();
